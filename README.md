@@ -1,0 +1,4 @@
+# Schoolgle Quest
+
+Project initialization.
+
