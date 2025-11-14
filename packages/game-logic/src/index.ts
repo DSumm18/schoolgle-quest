@@ -1,12 +1,11 @@
 // Game logic for Schoolgle Quest - XP, quest, and creature systems
 
+import { QuestStatus, CreatureType } from "@schoolgle/shared";
 import type {
   PlayerProgress,
   Quest,
-  QuestStatus,
   QuestObjective,
-  Creature,
-  CreatureType
+  Creature
 } from "@schoolgle/shared";
 
 // XP and Leveling System
@@ -292,6 +291,3 @@ export class WorldGenerator {
     };
   }
 }
-
-// Export all systems
-export { XPSystem, QuestSystem, CreatureSystem, WorldGenerator };

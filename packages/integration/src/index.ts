@@ -1,11 +1,10 @@
 // Integration package for external APIs: postcode, school, and location services
 
+import { LocationType, SchoolType } from "@schoolgle/shared";
 import type {
   PostcodeData,
   SchoolSearchResult,
   Location,
-  LocationType,
-  SchoolType,
   ApiResponse
 } from "@schoolgle/shared";
 
@@ -349,11 +348,3 @@ export class GeoUtils {
     );
   }
 }
-
-// Export all clients
-export {
-  PostcodeAPIClient,
-  SchoolAPIClient,
-  PlacesAPIClient,
-  GeoUtils
-};
