@@ -25,7 +25,7 @@ jobs:
         run: npm run lint --workspace web
 
       - name: Test
-        run: npm test --workspaces
+        run: npm test
 
       - name: Build
         run: npm run build --workspace web
