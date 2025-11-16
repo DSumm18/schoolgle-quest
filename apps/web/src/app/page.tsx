@@ -156,7 +156,18 @@ export default function HomePage() {
 
           {message && (
             <div className="mt-3 rounded-lg bg-green-500/10 border border-green-500/20 px-3 py-2 text-sm text-green-400">
-              {message}
+              <div className="flex items-start gap-2">
+                <span className="text-base">🗺️</span>
+                <div>
+                  <div className="font-semibold">Real-World Map Loaded!</div>
+                  <div className="text-xs mt-1 opacity-90">{message}</div>
+                  {worldData && worldData.buildings && (
+                    <div className="text-xs mt-1 opacity-75">
+                      {worldData.buildings.length} real buildings from OpenStreetMap • {worldData.creatures.length} creatures spawned
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </section>

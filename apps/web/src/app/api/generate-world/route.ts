@@ -41,12 +41,20 @@ export async function POST(request: NextRequest) {
     const centerLon = postcodeData.longitude;
 
     // Fetch real buildings from OpenStreetMap
+    console.log(`Fetching real buildings from OSM for ${centerLat}, ${centerLon}`);
     const placesClient = new PlacesAPIClient();
     const buildingsResult = await placesClient.fetchRealBuildings(
       centerLat,
       centerLon,
-      300 // 300m radius
+      500 // Increased to 500m radius for more buildings
     );
+
+    console.log(`OSM fetch result:`, {
+      success: buildingsResult.success,
+      buildingCount: buildingsResult.data?.length || 0,
+      message: buildingsResult.message,
+      error: buildingsResult.error
+    });
 
     const buildings: Building[] = [];
 
@@ -194,8 +202,8 @@ export async function POST(request: NextRequest) {
         postcodeData
       },
       message: buildingsResult.success && buildingsResult.data && buildingsResult.data.length > 0
-        ? `Generated world with ${buildings.length} real buildings from ${postcodeData.postcode} (${postcodeData.region})`
-        : `Generated world for ${postcodeData.postcode} (${postcodeData.region}) - using fallback`
+        ? `✓ Loaded ${buildings.length} real buildings from OpenStreetMap around ${postcodeData.postcode} (${postcodeData.region})`
+        : `⚠️ OpenStreetMap data unavailable for ${postcodeData.postcode}. Using demo building. Try a different UK postcode with more buildings (e.g., "M1 1AD" Manchester, "SW1A 1AA" London).`
     });
   } catch (error) {
     console.error("Error generating world:", error);
