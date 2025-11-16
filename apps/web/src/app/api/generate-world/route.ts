@@ -116,11 +116,68 @@ export async function POST(request: NextRequest) {
           type: buildingType,
           position: { x, y: height / 2, z },
           size: { x: width, y: height, z: depth },
-          color: getBuildingColor(buildingType, osmBuilding.type)
-        });
+          color: getBuildingColor(buildingType, osmBuilding.type),
+          name: osmBuilding.name || undefined,
+          amenity: osmBuilding.amenity || undefined,
+          osmData: osmBuilding // Store for school identification
+        } as any);
       }
 
       console.log(`Converted ${buildings.length} real OSM buildings to 3D world`);
+
+      // Identify the main school building
+      let mainSchool: Building | null = null;
+      let minDistance = Infinity;
+
+      for (const building of buildings) {
+        const osmData = (building as any).osmData;
+        if (!osmData) continue;
+
+        // Check if this is a school
+        const isSchool =
+          osmData.amenity === "school" ||
+          osmData.amenity === "kindergarten" ||
+          osmData.amenity === "college" ||
+          osmData.amenity === "university" ||
+          osmData.type === "school" ||
+          (osmData.name && osmData.name.toLowerCase().includes("school"));
+
+        if (isSchool) {
+          // Calculate distance from postcode center
+          const distance = Math.sqrt(
+            building.position.x * building.position.x +
+            building.position.z * building.position.z
+          );
+
+          if (distance < minDistance) {
+            minDistance = distance;
+            mainSchool = building;
+          }
+        }
+      }
+
+      // Mark the main school
+      if (mainSchool) {
+        mainSchool.isMainSchool = true;
+        // Give it a distinctive color
+        mainSchool.color = "#FFD700"; // Gold color for the school
+        console.log(`Identified main school: ${mainSchool.name || "Unnamed School"} at distance ${Math.round(minDistance)}m`);
+      } else {
+        console.log("No school building found in OSM data - using nearest large building as fallback");
+        // Fallback: mark the largest building near center as "school"
+        if (buildings.length > 0) {
+          const sortedBySize = [...buildings].sort((a, b) =>
+            (b.size.x * b.size.z) - (a.size.x * a.size.z)
+          );
+          mainSchool = sortedBySize[0];
+          mainSchool.isMainSchool = true;
+          mainSchool.name = mainSchool.name || "Local Building (Your School)";
+          mainSchool.color = "#FFD700";
+        }
+      }
+
+      // Clean up temporary osmData
+      buildings.forEach(b => delete (b as any).osmData);
     } else {
       // Fallback: create a simple placeholder building if OSM fetch failed
       console.log("OSM fetch failed, using fallback building");

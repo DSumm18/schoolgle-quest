@@ -1,10 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { SchoolWorldScene } from "../components/SchoolWorldScene";
 import { QuestPanel } from "../components/QuestPanel";
 import { BuildingInfoPanel } from "../components/BuildingInfoPanel";
+import { BuildingLabelsOverlay } from "../components/BuildingLabelsOverlay";
+import { MiniMap } from "../components/MiniMap";
+import { WelcomeBanner } from "../components/WelcomeBanner";
 import type { WorldData, Quest, PlayerProgress, Building } from "@schoolgle/shared";
+import type { Scene, Camera } from "@babylonjs/core";
 
 // Sample quest data
 const sampleQuests: Quest[] = [
@@ -68,6 +72,31 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [selectedBuilding, setSelectedBuilding] = useState<Building | null>(null);
+  const [scene, setScene] = useState<Scene | null>(null);
+  const [camera, setCamera] = useState<Camera | null>(null);
+  const [canvasDimensions, setCanvasDimensions] = useState({ width: 0, height: 0 });
+  const [showWelcomeBanner, setShowWelcomeBanner] = useState(false);
+  const [postcodeData, setPostcodeData] = useState<any>(null);
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
+
+  // Track canvas dimensions
+  useEffect(() => {
+    const updateDimensions = () => {
+      if (canvasContainerRef.current) {
+        const { width, height } = canvasContainerRef.current.getBoundingClientRect();
+        setCanvasDimensions({ width, height });
+      }
+    };
+
+    updateDimensions();
+    window.addEventListener("resize", updateDimensions);
+    return () => window.removeEventListener("resize", updateDimensions);
+  }, [worldData]);
+
+  const handleSceneReady = (newScene: Scene, newCamera: Camera) => {
+    setScene(newScene);
+    setCamera(newCamera);
+  };
 
   const handleGenerateWorld = async () => {
     if (!postcode.trim()) {
@@ -96,7 +125,9 @@ export default function HomePage() {
       }
 
       setWorldData(result.data.worldData);
+      setPostcodeData(result.data.postcodeData);
       setMessage(result.message);
+      setShowWelcomeBanner(true);
       console.log("World generated:", result.data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
@@ -105,8 +136,22 @@ export default function HomePage() {
     }
   };
 
+  // Find the main school building
+  const mainSchool = worldData?.buildings.find((b) => b.isMainSchool) || null;
+
   return (
     <>
+      {/* Welcome Banner */}
+      {showWelcomeBanner && worldData && postcodeData && (
+        <WelcomeBanner
+          mainSchool={mainSchool}
+          postcode={postcodeData.postcode}
+          region={postcodeData.region}
+          buildingCount={worldData.buildings.length}
+          onDismiss={() => setShowWelcomeBanner(false)}
+        />
+      )}
+
       {/* Quest Panel Overlay */}
       {worldData && (
         <QuestPanel quests={sampleQuests} playerProgress={sampleProgress} />
@@ -117,6 +162,15 @@ export default function HomePage() {
         building={selectedBuilding}
         onClose={() => setSelectedBuilding(null)}
       />
+
+      {/* Minimap */}
+      {worldData && camera && (
+        <MiniMap
+          buildings={worldData.buildings}
+          camera={camera}
+          worldSize={worldData.terrain.size.x}
+        />
+      )}
 
       <main className="space-y-6">
         <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
@@ -179,12 +233,27 @@ export default function HomePage() {
               ? `Showing 3D world for ${worldData.postcode}. Use WASD or arrow keys to move. Click buildings to interact!`
               : "Enter a postcode above and click Generate to see the 3D world."}
           </p>
-          <div className="h-96 rounded-xl border border-slate-700 bg-slate-950 overflow-hidden relative">
+          <div
+            ref={canvasContainerRef}
+            className="h-96 rounded-xl border border-slate-700 bg-slate-950 overflow-hidden relative"
+          >
             {worldData ? (
-              <SchoolWorldScene
-                worldData={worldData}
-                onBuildingClick={(building) => setSelectedBuilding(building)}
-              />
+              <>
+                <SchoolWorldScene
+                  worldData={worldData}
+                  onBuildingClick={(building) => setSelectedBuilding(building)}
+                  onSceneReady={handleSceneReady}
+                />
+                {scene && camera && canvasDimensions.width > 0 && (
+                  <BuildingLabelsOverlay
+                    buildings={worldData.buildings}
+                    scene={scene}
+                    camera={camera}
+                    canvasWidth={canvasDimensions.width}
+                    canvasHeight={canvasDimensions.height}
+                  />
+                )}
+              </>
             ) : (
               <div className="w-full h-full flex items-center justify-center text-xs opacity-60">
                 3D canvas will appear here after generating a world

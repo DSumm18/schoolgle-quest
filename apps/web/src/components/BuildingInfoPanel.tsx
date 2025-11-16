@@ -32,23 +32,53 @@ export function BuildingInfoPanel({ building, onClose }: BuildingInfoPanelProps)
             ✕
           </button>
 
-          {/* Building icon based on type */}
+          {/* Special indicator for main school */}
+          {building.isMainSchool && (
+            <div className="mb-3 bg-yellow-500/20 border border-yellow-500/40 rounded-lg px-3 py-2 text-sm flex items-center gap-2">
+              <span className="text-xl">⭐</span>
+              <span className="font-semibold text-yellow-300">Your School</span>
+            </div>
+          )}
+
+          {/* Building icon based on type or amenity */}
           <div className="text-4xl mb-3">
-            {building.type === "main_building" && "🏫"}
-            {building.type === "classroom" && "📚"}
-            {building.type === "library" && "📖"}
-            {building.type === "gym" && "🏋️"}
-            {building.type === "cafeteria" && "🍽️"}
-            {building.type === "office" && "💼"}
+            {(building.amenity === "school" || building.type === "main_building") && "🏫"}
+            {building.amenity === "library" && "📖"}
+            {building.amenity === "cafe" && "☕"}
+            {building.amenity === "restaurant" && "🍽️"}
+            {building.amenity === "shop" && "🏪"}
+            {building.amenity === "hospital" && "🏥"}
+            {building.amenity === "church" && "⛪"}
+            {!building.amenity && building.type === "classroom" && "📚"}
+            {!building.amenity && building.type === "gym" && "🏋️"}
+            {!building.amenity && building.type === "cafeteria" && "🍽️"}
+            {!building.amenity && building.type === "office" && "💼"}
           </div>
 
-          {/* Building info */}
-          <h3 className="text-xl font-bold mb-2 capitalize">
-            {building.type.replace("_", " ")}
+          {/* Building name (if available) */}
+          <h3 className="text-xl font-bold mb-2">
+            {building.name || (
+              <span className="capitalize">
+                {building.amenity || building.type.replace("_", " ")}
+              </span>
+            )}
           </h3>
 
+          {/* Building type/amenity tag */}
+          {building.amenity && (
+            <div className="mb-3">
+              <span className="inline-block bg-sky-500/20 text-sky-300 px-2 py-1 rounded text-xs font-medium">
+                {building.amenity}
+              </span>
+            </div>
+          )}
+
           <p className="text-sm text-slate-300 mb-4">
-            {descriptions[building.type] || "An interesting building."}
+            {building.amenity ? (
+              `Real ${building.amenity} from OpenStreetMap`
+            ) : (
+              descriptions[building.type] || "An interesting building."
+            )}
           </p>
 
           {/* Building stats */}

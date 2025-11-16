@@ -189,6 +189,9 @@ export interface Building {
   size: Vector3;
   color?: string;
   textureUrl?: string;
+  name?: string; // Building name from OSM (e.g. "St Mary's Primary School")
+  amenity?: string; // OSM amenity tag (e.g. "school", "library")
+  isMainSchool?: boolean; // Flag to highlight the primary school for this postcode
 }
 
 export enum BuildingType {

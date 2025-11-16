@@ -12,16 +12,18 @@ import {
   Color3,
   UniversalCamera,
   KeyboardEventTypes,
-  PointerEventTypes
+  PointerEventTypes,
+  Camera
 } from "@babylonjs/core";
 import type { WorldData, Building } from "@schoolgle/shared";
 
 interface SchoolWorldSceneProps {
   worldData?: WorldData | null;
   onBuildingClick?: (building: Building) => void;
+  onSceneReady?: (scene: Scene, camera: Camera) => void;
 }
 
-export function SchoolWorldScene({ worldData, onBuildingClick }: SchoolWorldSceneProps) {
+export function SchoolWorldScene({ worldData, onBuildingClick, onSceneReady }: SchoolWorldSceneProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Engine | null>(null);
   const sceneRef = useRef<Scene | null>(null);
@@ -56,6 +58,11 @@ export function SchoolWorldScene({ worldData, onBuildingClick }: SchoolWorldScen
     camera.keysDown = [83, 40]; // S, Down Arrow
     camera.keysLeft = [65, 37]; // A, Left Arrow
     camera.keysRight = [68, 39]; // D, Right Arrow
+
+    // Notify parent that scene is ready
+    if (onSceneReady) {
+      onSceneReady(scene, camera);
+    }
 
     // Add lighting
     const light = new HemisphericLight("light", new Vector3(0, 1, 0), scene);
