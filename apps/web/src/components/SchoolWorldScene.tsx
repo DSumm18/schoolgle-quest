@@ -59,35 +59,66 @@ export function SchoolWorldScene({ worldData }: SchoolWorldSceneProps) {
     const light = new HemisphericLight("light", new Vector3(0, 1, 0), scene);
     light.intensity = 0.8;
 
-    // Create ground plane
+    // Create ground plane (size based on terrain data)
+    const groundSize = worldData?.terrain.size.x || 50;
     const ground = MeshBuilder.CreateGround(
       "ground",
-      { width: 50, height: 50 },
+      { width: groundSize, height: groundSize },
       scene
     );
     const groundMaterial = new StandardMaterial("groundMat", scene);
     groundMaterial.diffuseColor = new Color3(0.3, 0.6, 0.3); // Green grass
     ground.material = groundMaterial;
 
-    // Create a simple school building block
-    const building = MeshBuilder.CreateBox(
-      "school-building",
-      { width: 8, height: 6, depth: 10 },
-      scene
-    );
-    building.position.y = 3; // Half the height to sit on ground
+    // Create buildings from world data
+    if (worldData && worldData.buildings && worldData.buildings.length > 0) {
+      console.log(`Rendering ${worldData.buildings.length} buildings from ${worldData.postcode}`);
 
-    const buildingMaterial = new StandardMaterial("buildingMat", scene);
-    buildingMaterial.diffuseColor = new Color3(0.8, 0.7, 0.6); // Beige/brick color
-    building.material = buildingMaterial;
+      for (const buildingData of worldData.buildings) {
+        // Create box for each building
+        const buildingMesh = MeshBuilder.CreateBox(
+          buildingData.id,
+          {
+            width: buildingData.size.x,
+            height: buildingData.size.y,
+            depth: buildingData.size.z
+          },
+          scene
+        );
 
-    // If we have world data, log it for now (we'll use it later)
-    if (worldData) {
-      console.log("World data received:", worldData);
-      // TODO: Use worldData to create multiple buildings based on buildingCount
-      // For now, just change the building color based on postcode seed
-      const hue = (worldData.postcode.charCodeAt(0) % 360) / 360;
-      buildingMaterial.diffuseColor = Color3.FromHSV(hue * 360, 0.5, 0.8);
+        // Position the building
+        buildingMesh.position.x = buildingData.position.x;
+        buildingMesh.position.y = buildingData.position.y;
+        buildingMesh.position.z = buildingData.position.z;
+
+        // Apply material with color
+        const material = new StandardMaterial(`mat-${buildingData.id}`, scene);
+
+        // Parse hex color to Color3
+        const hexColor = buildingData.color || "#C8B4A0";
+        const r = parseInt(hexColor.slice(1, 3), 16) / 255;
+        const g = parseInt(hexColor.slice(3, 5), 16) / 255;
+        const b = parseInt(hexColor.slice(5, 7), 16) / 255;
+
+        material.diffuseColor = new Color3(r, g, b);
+        buildingMesh.material = material;
+      }
+
+      // Adjust camera position based on building spread
+      camera.position = new Vector3(-50, 30, -50);
+      camera.setTarget(new Vector3(0, 0, 0));
+    } else {
+      // Fallback: single building if no data
+      const building = MeshBuilder.CreateBox(
+        "fallback-building",
+        { width: 8, height: 6, depth: 10 },
+        scene
+      );
+      building.position.y = 3;
+
+      const material = new StandardMaterial("fallbackMat", scene);
+      material.diffuseColor = new Color3(0.8, 0.7, 0.6);
+      building.material = material;
     }
 
     // Run the render loop

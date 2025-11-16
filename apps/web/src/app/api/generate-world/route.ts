@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PostcodeAPIClient } from "@schoolgle/integration";
+import { PostcodeAPIClient, PlacesAPIClient, GeoUtils } from "@schoolgle/integration";
 import { WorldGenerator } from "@schoolgle/game-logic";
 import { BuildingType, CreatureType } from "@schoolgle/shared";
 import type {
@@ -37,86 +37,106 @@ export async function POST(request: NextRequest) {
     }
 
     const postcodeData = postcodeResult.data;
+    const centerLat = postcodeData.latitude;
+    const centerLon = postcodeData.longitude;
 
-    // Generate school layout using the WorldGenerator
-    const layout = WorldGenerator.generateSchoolLayout(postcode);
+    // Fetch real buildings from OpenStreetMap
+    const placesClient = new PlacesAPIClient();
+    const buildingsResult = await placesClient.fetchRealBuildings(
+      centerLat,
+      centerLon,
+      300 // 300m radius
+    );
 
-    // Create dummy buildings based on generated layout
     const buildings: Building[] = [];
-    const seed = WorldGenerator.generateSeed(postcode);
 
-    // Main building (always present)
-    buildings.push({
-      id: "building-main",
-      type: BuildingType.MAIN_BUILDING,
-      position: { x: 0, y: 3, z: 0 },
-      size: { x: 8, y: 6, z: 10 },
-      color: "#C8B4A0"
-    });
+    if (buildingsResult.success && buildingsResult.data && buildingsResult.data.length > 0) {
+      // Convert real OSM buildings to 3D world coordinates
+      const osmBuildings = buildingsResult.data;
 
-    // Generate additional buildings based on buildingCount
-    const buildingTypes = [
-      BuildingType.CLASSROOM,
-      BuildingType.LIBRARY,
-      BuildingType.GYM,
-      BuildingType.CAFETERIA,
-      BuildingType.OFFICE
-    ];
+      // Helper function to convert lat/lon to local x/z coordinates
+      const latLonToLocal = (lat: number, lon: number) => {
+        // Calculate distance from center in meters
+        const dx = GeoUtils.calculateDistance(centerLat, centerLon, centerLat, lon) * 1000;
+        const dz = GeoUtils.calculateDistance(centerLat, centerLon, lat, centerLon) * 1000;
 
-    for (let i = 1; i < layout.buildingCount; i++) {
-      const random1 = WorldGenerator.seededRandom(seed + i);
-      const random2 = WorldGenerator.seededRandom(seed + i + 100);
-      const random3 = WorldGenerator.seededRandom(seed + i + 200);
+        // Apply sign based on direction
+        const x = lon > centerLon ? dx : -dx;
+        const z = lat > centerLat ? -dz : dz; // Invert Z for typical 3D coordinate system
 
-      const x = (random1 - 0.5) * 30; // Spread across 30 units
-      const z = (random2 - 0.5) * 30;
-      const buildingType =
-        buildingTypes[Math.floor(random3 * buildingTypes.length)];
+        return { x, z };
+      };
 
+      // Map OSM building types to our BuildingType enum
+      const mapBuildingType = (osmType: string, amenity: string | null): BuildingType => {
+        if (amenity === "school" || osmType === "school") return BuildingType.MAIN_BUILDING;
+        if (amenity === "library" || osmType === "library") return BuildingType.LIBRARY;
+        if (amenity === "gym" || osmType === "gym" || osmType === "sports_hall") return BuildingType.GYM;
+        if (amenity === "cafe" || amenity === "restaurant" || osmType === "cafe") return BuildingType.CAFETERIA;
+        if (osmType === "office" || osmType === "commercial") return BuildingType.OFFICE;
+        if (osmType === "residential" || osmType === "house" || osmType === "apartments") return BuildingType.CLASSROOM;
+        return BuildingType.MAIN_BUILDING;
+      };
+
+      // Map building type to color
+      const getBuildingColor = (buildingType: BuildingType, osmType: string): string => {
+        const colorMap: Record<BuildingType, string> = {
+          [BuildingType.MAIN_BUILDING]: "#C8B4A0",
+          [BuildingType.CLASSROOM]: "#E8D4C0",
+          [BuildingType.LIBRARY]: "#A0B4C8",
+          [BuildingType.GYM]: "#C0E8D4",
+          [BuildingType.CAFETERIA]: "#E8C0D4",
+          [BuildingType.OFFICE]: "#D4C0E8"
+        };
+
+        return colorMap[buildingType] || "#B0B0B0";
+      };
+
+      // Convert OSM buildings to our Building format
+      for (const osmBuilding of osmBuildings.slice(0, 50)) { // Limit to 50 buildings for performance
+        const { x, z } = latLonToLocal(osmBuilding.latitude, osmBuilding.longitude);
+
+        // Constrain to reasonable building sizes for Minecraft-style world
+        const width = Math.max(3, Math.min(osmBuilding.width || 10, 30));
+        const depth = Math.max(3, Math.min(osmBuilding.depth || 10, 30));
+        const height = Math.max(3, Math.min(osmBuilding.height || 6, 50));
+
+        const buildingType = mapBuildingType(osmBuilding.type, osmBuilding.amenity);
+
+        buildings.push({
+          id: osmBuilding.id,
+          type: buildingType,
+          position: { x, y: height / 2, z },
+          size: { x: width, y: height, z: depth },
+          color: getBuildingColor(buildingType, osmBuilding.type)
+        });
+      }
+
+      console.log(`Converted ${buildings.length} real OSM buildings to 3D world`);
+    } else {
+      // Fallback: create a simple placeholder building if OSM fetch failed
+      console.log("OSM fetch failed, using fallback building");
       buildings.push({
-        id: `building-${i}`,
-        type: buildingType,
-        position: { x, y: 2, z },
-        size: { x: 4 + random1 * 2, y: 3 + random2 * 2, z: 4 + random3 * 2 },
-        color: `hsl(${random1 * 360}, 40%, 60%)`
+        id: "fallback-building",
+        type: BuildingType.MAIN_BUILDING,
+        position: { x: 0, y: 3, z: 0 },
+        size: { x: 8, y: 6, z: 10 },
+        color: "#C8B4A0"
       });
     }
 
-    // Create terrain data
+    // Create terrain data (larger for real buildings)
     const terrain: TerrainData = {
       size: {
-        x: layout.terrainSize,
+        x: 600, // 600m x 600m area
         y: 0,
-        z: layout.terrainSize
+        z: 600
       }
     };
 
-    // Generate dummy creatures (we'll use these later)
+    // Generate creatures (placeholder for now)
     const creatures: Creature[] = [];
-    const creatureTypes: CreatureType[] = [
-      CreatureType.HR,
-      CreatureType.FINANCE,
-      CreatureType.ESTATES,
-      CreatureType.GDPR
-    ];
-
-    for (let i = 0; i < layout.creatureCount; i++) {
-      const random = WorldGenerator.seededRandom(seed + i + 500);
-      const creatureType =
-        creatureTypes[Math.floor(random * creatureTypes.length)];
-
-      creatures.push({
-        id: `creature-${i}`,
-        name: `${creatureType} Guardian`,
-        type: creatureType,
-        level: 1,
-        health: 100,
-        maxHealth: 100,
-        attack: 15,
-        defense: 10,
-        abilities: []
-      });
-    }
+    // TODO: Add creature placement logic based on building types
 
     // Construct the world data response
     const worldData: WorldData = {
@@ -134,10 +154,11 @@ export async function POST(request: NextRequest) {
       success: true,
       data: {
         worldData,
-        postcodeData,
-        layout
+        postcodeData
       },
-      message: `Generated world for ${postcodeData.postcode} (${postcodeData.region})`
+      message: buildingsResult.success && buildingsResult.data && buildingsResult.data.length > 0
+        ? `Generated world with ${buildings.length} real buildings from ${postcodeData.postcode} (${postcodeData.region})`
+        : `Generated world for ${postcodeData.postcode} (${postcodeData.region}) - using fallback`
     });
   } catch (error) {
     console.error("Error generating world:", error);

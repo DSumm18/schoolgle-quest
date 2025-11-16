@@ -308,6 +308,101 @@ export class PlacesAPIClient {
       };
     }
   }
+
+  // Fetch real buildings from OpenStreetMap
+  async fetchRealBuildings(
+    latitude: number,
+    longitude: number,
+    radius: number = 300
+  ): Promise<ApiResponse<any[]>> {
+    try {
+      // Overpass QL query to get buildings within radius
+      const query = `
+        [out:json][timeout:25];
+        (
+          way["building"](around:${radius},${latitude},${longitude});
+          relation["building"](around:${radius},${latitude},${longitude});
+        );
+        out body;
+        >;
+        out skel qt;
+      `;
+
+      const result = await this.queryOverpassAPI(query);
+
+      if (!result.success || !result.data) {
+        return result;
+      }
+
+      // Parse OSM data into building objects
+      const elements = result.data.elements || [];
+      const nodes = new Map();
+      const buildings = [];
+
+      // First pass: collect all nodes
+      for (const element of elements) {
+        if (element.type === "node") {
+          nodes.set(element.id, { lat: element.lat, lon: element.lon });
+        }
+      }
+
+      // Second pass: process buildings
+      for (const element of elements) {
+        if (element.type === "way" && element.tags && element.tags.building) {
+          // Calculate building center from nodes
+          const buildingNodes = element.nodes
+            .map((nodeId: number) => nodes.get(nodeId))
+            .filter((node: any) => node);
+
+          if (buildingNodes.length === 0) continue;
+
+          const avgLat =
+            buildingNodes.reduce((sum: number, node: any) => sum + node.lat, 0) /
+            buildingNodes.length;
+          const avgLon =
+            buildingNodes.reduce((sum: number, node: any) => sum + node.lon, 0) /
+            buildingNodes.length;
+
+          // Estimate building dimensions from bounding box
+          const lats = buildingNodes.map((node: any) => node.lat);
+          const lons = buildingNodes.map((node: any) => node.lon);
+          const minLat = Math.min(...lats);
+          const maxLat = Math.max(...lats);
+          const minLon = Math.min(...lons);
+          const maxLon = Math.max(...lons);
+
+          // Convert lat/lon differences to approximate meters
+          const width = GeoUtils.calculateDistance(avgLat, minLon, avgLat, maxLon) * 1000;
+          const depth = GeoUtils.calculateDistance(minLat, avgLon, maxLat, avgLon) * 1000;
+
+          buildings.push({
+            id: `osm-${element.id}`,
+            latitude: avgLat,
+            longitude: avgLon,
+            type: element.tags.building,
+            amenity: element.tags.amenity || null,
+            name: element.tags.name || null,
+            levels: parseInt(element.tags["building:levels"] || "2"),
+            height: parseFloat(element.tags.height || String(parseInt(element.tags["building:levels"] || "2") * 3)),
+            width,
+            depth,
+            nodes: buildingNodes
+          });
+        }
+      }
+
+      return {
+        success: true,
+        data: buildings,
+        message: `Found ${buildings.length} real buildings from OpenStreetMap`
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error"
+      };
+    }
+  }
 }
 
 // Distance calculation helper
