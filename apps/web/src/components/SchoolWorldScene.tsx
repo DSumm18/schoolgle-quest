@@ -11,15 +11,17 @@ import {
   StandardMaterial,
   Color3,
   UniversalCamera,
-  KeyboardEventTypes
+  KeyboardEventTypes,
+  PointerEventTypes
 } from "@babylonjs/core";
-import type { WorldData } from "@schoolgle/shared";
+import type { WorldData, Building } from "@schoolgle/shared";
 
 interface SchoolWorldSceneProps {
   worldData?: WorldData | null;
+  onBuildingClick?: (building: Building) => void;
 }
 
-export function SchoolWorldScene({ worldData }: SchoolWorldSceneProps) {
+export function SchoolWorldScene({ worldData, onBuildingClick }: SchoolWorldSceneProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Engine | null>(null);
   const sceneRef = useRef<Scene | null>(null);
@@ -102,7 +104,23 @@ export function SchoolWorldScene({ worldData }: SchoolWorldSceneProps) {
 
         material.diffuseColor = new Color3(r, g, b);
         buildingMesh.material = material;
+
+        // Store building data on mesh for click handling
+        (buildingMesh as any).buildingData = buildingData;
+
+        // Make building clickable
+        buildingMesh.isPickable = true;
       }
+
+      // Add click detection
+      scene.onPointerObservable.add((pointerInfo) => {
+        if (pointerInfo.type === PointerEventTypes.POINTERDOWN) {
+          const pickedMesh = pointerInfo.pickInfo?.pickedMesh;
+          if (pickedMesh && (pickedMesh as any).buildingData && onBuildingClick) {
+            onBuildingClick((pickedMesh as any).buildingData);
+          }
+        }
+      });
 
       // Adjust camera position based on building spread
       camera.position = new Vector3(-50, 30, -50);
@@ -119,6 +137,50 @@ export function SchoolWorldScene({ worldData }: SchoolWorldSceneProps) {
       const material = new StandardMaterial("fallbackMat", scene);
       material.diffuseColor = new Color3(0.8, 0.7, 0.6);
       building.material = material;
+    }
+
+    // Render creatures
+    if (worldData && worldData.creatures && worldData.creatures.length > 0) {
+      console.log(`Rendering ${worldData.creatures.length} creatures`);
+
+      // Creature type to color mapping
+      const creatureColors: Record<string, Color3> = {
+        hr: new Color3(0.68, 0.85, 0.90), // Light blue
+        finance: new Color3(1.0, 0.67, 0.30), // Orange
+        estates: new Color3(0.0, 0.83, 0.83), // Cyan
+        gdpr: new Color3(1.0, 0.84, 0.0), // Gold
+        compliance: new Color3(0.90, 0.76, 1.0), // Lavender
+        teaching: new Color3(1.0, 0.71, 0.76), // Pink
+        send: new Color3(0.6, 1.0, 0.6) // Light green
+      };
+
+      for (const creature of worldData.creatures) {
+        if (!creature.position) continue;
+
+        // Create sphere for creature
+        const creatureMesh = MeshBuilder.CreateSphere(
+          creature.id,
+          { diameter: 2 },
+          scene
+        );
+
+        // Position the creature
+        creatureMesh.position.x = creature.position.x;
+        creatureMesh.position.y = creature.position.y;
+        creatureMesh.position.z = creature.position.z;
+
+        // Apply material with creature type color
+        const material = new StandardMaterial(`mat-${creature.id}`, scene);
+        material.diffuseColor = creatureColors[creature.type] || new Color3(0.8, 0.8, 0.8);
+        material.emissiveColor = creatureColors[creature.type]?.scale(0.3) || new Color3(0.2, 0.2, 0.2);
+        creatureMesh.material = material;
+
+        // Add simple bobbing animation
+        const initialY = creature.position.y;
+        scene.registerBeforeRender(() => {
+          creatureMesh.position.y = initialY + Math.sin(Date.now() * 0.001 + parseInt(creature.id.split('-')[1] || '0')) * 0.3;
+        });
+      }
     }
 
     // Run the render loop
