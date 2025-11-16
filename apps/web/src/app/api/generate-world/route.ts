@@ -134,9 +134,46 @@ export async function POST(request: NextRequest) {
       }
     };
 
-    // Generate creatures (placeholder for now)
+    // Generate creatures based on building types
     const creatures: Creature[] = [];
-    // TODO: Add creature placement logic based on building types
+    const creatureTypeMap: Record<BuildingType, CreatureType> = {
+      [BuildingType.MAIN_BUILDING]: CreatureType.TEACHING,
+      [BuildingType.CLASSROOM]: CreatureType.TEACHING,
+      [BuildingType.LIBRARY]: CreatureType.TEACHING,
+      [BuildingType.GYM]: CreatureType.SEND,
+      [BuildingType.CAFETERIA]: CreatureType.FINANCE,
+      [BuildingType.OFFICE]: CreatureType.HR
+    };
+
+    // Spawn one creature per building (or every other building for performance)
+    buildings.forEach((building, index) => {
+      if (index % 2 === 0 && creatures.length < 25) { // Limit to 25 creatures
+        const creatureType = creatureTypeMap[building.type] || CreatureType.TEACHING;
+
+        // Position creature near the building
+        const offsetX = (Math.random() - 0.5) * 10;
+        const offsetZ = (Math.random() - 0.5) * 10;
+
+        creatures.push({
+          id: `creature-${building.id}`,
+          name: `${creatureType} Guardian`,
+          type: creatureType,
+          level: 1,
+          health: 100,
+          maxHealth: 100,
+          attack: 15,
+          defense: 10,
+          abilities: [],
+          position: {
+            x: building.position.x + offsetX,
+            y: 2, // Ground level + creature height
+            z: building.position.z + offsetZ
+          }
+        });
+      }
+    });
+
+    console.log(`Spawned ${creatures.length} creatures in the world`);
 
     // Construct the world data response
     const worldData: WorldData = {

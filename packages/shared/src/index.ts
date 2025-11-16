@@ -47,6 +47,7 @@ export interface Creature {
   defense: number;
   modelUrl?: string;
   abilities: string[];
+  position?: Vector3; // Optional position in 3D space
 }
 
 export enum CreatureType {
